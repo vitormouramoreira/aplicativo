@@ -1,0 +1,746 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Organizador de Aulas</title>
+<meta name="theme-color" content="#3B4CB8" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Aulas" />
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<link rel="icon" href="icon-192.png" />
+<style>
+  :root{
+    --ink:#20242B; --paper:#F7F7F4; --paper-soft:#EFEEEA;
+    --accent:#3B4CB8; --accent-soft:#E7E9F8; --line:#DCDAD3; --danger:#B24242;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--paper);color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-tap-highlight-color:transparent; overscroll-behavior:none;}
+  button,label.btn{font-family:inherit;cursor:pointer;}
+  .oa-heading{font-weight:700;}
+  .oa-time{font-variant-numeric:tabular-nums;font-family:ui-monospace,"SF Mono",Menlo,monospace;}
+  .hidden-file{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;white-space:nowrap;border:0;}
+  .spinner{width:26px;height:26px;border-radius:50%;border:3px solid var(--accent-soft);
+    border-top-color:var(--accent);animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .loading-wrap{display:flex;align-items:center;justify-content:center;padding:90px 0;}
+  .app-shell{max-width:720px;margin:0 auto;min-height:100vh;}
+  .header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line);}
+  .header h1{font-size:18px;margin:0;}
+  .header-actions{display:flex;gap:6px;}
+  .chip-btn{display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:10px;border:1px solid var(--line);
+    background:transparent;color:var(--ink);font-size:13px;}
+  .chip-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .icon-btn{padding:8px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--ink);}
+  .banner{padding:9px 16px;font-size:13px;}
+  .banner.move{background:var(--accent-soft);color:var(--accent);}
+  .banner.empty{background:var(--paper-soft);color:#5B6270;}
+  .grid-wrap{padding:12px;overflow-x:auto;}
+  .grid{display:grid;gap:6px;}
+  .day-head{text-align:center;padding:4px 0;font-size:13px;font-weight:600;color:#4A5160;}
+  .time-label{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;padding-right:8px;font-size:11px;color:#7A8190;line-height:1.3;}
+  .cell{position:relative;min-height:64px;border-radius:10px;padding:8px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;border:1.5px dashed var(--line);background:var(--paper-soft);
+    color:#A8ADB8;transition:transform .1s;}
+  .cell:active{transform:scale(0.97);}
+  .cell.filled{border:2px solid transparent;}
+  .cell.selected{border:2px solid var(--accent) !important;}
+  .cell-subject{font-size:13px;font-weight:600;line-height:1.2;}
+  .cell-count{font-size:11px;opacity:.85;margin-top:3px;}
+  .cell-edit{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.18);border-radius:999px;padding:4px;display:flex;}
+  .overlay{position:fixed;inset:0;background:rgba(20,22,28,.45);z-index:55;display:flex;align-items:flex-end;justify-content:center;}
+  .modal{background:var(--paper);width:100%;max-width:380px;border-radius:18px 18px 0 0;padding:20px 20px 24px;position:relative;}
+  @media (min-width:640px){.overlay{align-items:center;} .modal{border-radius:16px;}}
+  .modal h2{font-size:16px;margin:0 0 12px;}
+  .modal .close{position:absolute;top:14px;right:14px;background:none;border:none;color:#9AA0AA;}
+  .field-label{font-size:12px;color:#7A8190;display:block;margin-bottom:4px;}
+  .text-input{width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:14px;outline:none;margin-bottom:12px;background:#fff;color:var(--ink);}
+  .swatches{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 16px;}
+  .swatch{width:30px;height:30px;border-radius:50%;border:2px solid transparent;display:flex;align-items:center;justify-content:center;}
+  .row-gap{display:flex;gap:8px;}
+  .btn-primary{flex:1;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:10px;font-size:14px;font-weight:600;}
+  .btn-outline{border:1px solid var(--line);background:transparent;border-radius:10px;padding:10px 14px;font-size:14px;color:var(--ink);}
+  .btn-danger-outline{border:1px solid #E3B3B3;color:var(--danger);background:transparent;border-radius:10px;padding:10px;font-size:14px;width:100%;}
+  .day-toggles{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;}
+  .day-toggle{padding:6px 10px;border-radius:999px;font-size:12px;border:1px solid var(--line);background:transparent;color:#7A8190;}
+  .day-toggle.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);}
+  .slot-row{display:flex;align-items:center;justify-content:space-between;font-size:13px;padding:3px 0;}
+  .gallery-screen{position:fixed;inset:0;background:var(--paper);z-index:50;display:flex;flex-direction:column;}
+  .gallery-header{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);}
+  .gallery-header button{background:none;border:none;color:var(--ink);padding:4px;}
+  .week-nav{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--paper-soft);}
+  .week-nav button{background:none;border:none;color:var(--ink);}
+  .week-nav button:disabled{opacity:.3;}
+  .gallery-body{flex:1;overflow-y:auto;padding:16px;}
+  .date-group{margin-bottom:20px;}
+  .date-group-label{font-size:12px;font-weight:600;color:#7A8190;margin-bottom:8px;}
+  .photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+  .photo-thumb{position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--line);aspect-ratio:1/1;background:#fff;padding:0;}
+  .photo-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .photo-time{position:absolute;bottom:3px;right:4px;font-size:10px;color:#fff;background:rgba(0,0,0,.5);padding:1px 4px;border-radius:4px;}
+  .empty-gallery{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 0;text-align:center;color:#7A8190;font-size:13px;}
+  .gallery-footer{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line);}
+  .lightbox{position:fixed;inset:0;background:rgba(15,16,20,.94);z-index:60;display:flex;flex-direction:column;}
+  .lightbox-top{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;color:#fff;}
+  .lightbox-top button{background:none;border:none;color:#fff;}
+  .lightbox-mid{flex:1;display:flex;align-items:center;justify-content:center;padding:0 8px;}
+  .lightbox-mid img{max-width:100%;max-height:100%;object-fit:contain;}
+  .lightbox-nav{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;}
+  .lightbox-nav button{background:none;border:none;color:#fff;}
+  .lightbox-nav button:disabled{opacity:.3;}
+  .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;
+    padding:9px 16px;border-radius:999px;font-size:13px;z-index:70;box-shadow:0 6px 20px rgba(0,0,0,.2);}
+  svg{display:block;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* ---------------- constants ---------------- */
+const DAY_NAMES = ["Segunda","Terça","Quarta","Quinta","Sexta","Sábado","Domingo"];
+const DEFAULT_SLOTS = [
+  { id:"s1", start:"07:00", end:"08:40" },
+  { id:"s2", start:"08:50", end:"10:30" },
+  { id:"s3", start:"10:40", end:"12:20" },
+];
+const PRESET_COLORS = [
+  { name:"Azul",   bg:"#5B7FD6", fg:"#FFFFFF" },
+  { name:"Ciano",  bg:"#5FC7C0", fg:"#0F2A28" },
+  { name:"Verde",  bg:"#7CAE6B", fg:"#FFFFFF" },
+  { name:"Roxo",   bg:"#8E77C9", fg:"#FFFFFF" },
+  { name:"Âmbar",  bg:"#E3A94E", fg:"#3A2A00" },
+  { name:"Rosa",   bg:"#D97CA0", fg:"#FFFFFF" },
+  { name:"Cinza",  bg:"#8B94A3", fg:"#FFFFFF" },
+  { name:"Coral",  bg:"#DD7A6C", fg:"#FFFFFF" },
+];
+const ICONS = {
+  camera: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+  gallery: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/><path d="M16 4v4"/><path d="M14 6h4"/></svg>',
+  swap: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>',
+  gear: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+  plus: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>',
+  trash: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>',
+  trashLg: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>',
+  x: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  xLg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  chevLeft: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>',
+  chevLeftLg: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>',
+  chevRight: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
+  chevRightLg: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
+  check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+};
+
+/* ---------------- state ---------------- */
+let db = null;
+let schedule = null;
+let loading = true;
+
+let moveMode = false;
+let moveSource = null;
+
+let editCell = null;
+let editSubjectValue = "";
+let editColorValue = PRESET_COLORS[0].bg;
+
+let settingsOpen = false;
+let addSlotOpen = false;
+let newSlotStart = "";
+let newSlotEnd = "";
+
+let galleryCell = null;
+let photos = [];
+let selectedWeek = null;
+let loadingPhotos = false;
+let uploading = false;
+let lightboxIndex = null;
+
+let confirmState = null; // { message, onConfirm }
+let toastMsg = null;
+let toastTimer = null;
+
+/* ---------------- helpers ---------------- */
+function esc(s){
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function cellKey(day, slotId){ return day + "_" + slotId; }
+function defaultSchedule(){
+  return { activeDays:[0,1,2,3,4], slots: DEFAULT_SLOTS, cells:{} };
+}
+function weekStartOf(iso){
+  const d = new Date(iso);
+  const day = d.getDay();
+  const diff = (day === 0 ? -6 : 1) - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0,0,0,0);
+  return d;
+}
+function weekKeyOf(iso){ return weekStartOf(iso).toISOString().slice(0,10); }
+function weekLabelOf(weekKey){
+  const start = new Date(weekKey + "T00:00:00");
+  const end = new Date(start); end.setDate(end.getDate()+6);
+  const fmt = dt => dt.toLocaleDateString("pt-BR", { day:"2-digit", month:"2-digit" });
+  return fmt(start) + " – " + fmt(end);
+}
+function fmtDate(iso){
+  const d = new Date(iso);
+  const s = d.toLocaleDateString("pt-BR", { day:"2-digit", month:"long" });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+function fmtTime(iso){
+  return new Date(iso).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" });
+}
+function groupByDate(items){
+  const map = {};
+  items.forEach(p => {
+    const d = new Date(p.ts);
+    const key = d.getFullYear()+"-"+d.getMonth()+"-"+d.getDate();
+    if (!map[key]) map[key] = { date: p.ts, items: [] };
+    map[key].items.push(p);
+  });
+  return Object.values(map).sort((a,b) => new Date(b.date) - new Date(a.date));
+}
+function readFileAsDataURL(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+function compressImage(dataUrl, maxDim, quality){
+  maxDim = maxDim || 1500; quality = quality || 0.72;
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim){
+        if (width > height){ height = Math.round(height*maxDim/width); width = maxDim; }
+        else { width = Math.round(width*maxDim/height); height = maxDim; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#fff"; ctx.fillRect(0,0,width,height);
+      ctx.drawImage(img,0,0,width,height);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
+/* ---------------- IndexedDB ---------------- */
+function openDB(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open("organizadorAulasDB", 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore("kv"); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+function idbGet(key){
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("kv","readonly");
+    const r = tx.objectStore("kv").get(key);
+    r.onsuccess = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+  });
+}
+function idbSet(key, value){
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("kv","readwrite");
+    tx.objectStore("kv").put(value, key);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+function idbDelete(key){
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("kv","readwrite");
+    tx.objectStore("kv").delete(key);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+function idbKeysWithPrefix(prefix){
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("kv","readonly");
+    const req = tx.objectStore("kv").openCursor();
+    const keys = [];
+    req.onsuccess = e => {
+      const cur = e.target.result;
+      if (cur){
+        if (String(cur.key).indexOf(prefix) === 0) keys.push(cur.key);
+        cur.continue();
+      } else resolve(keys);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/* ---------------- toast / confirm ---------------- */
+function showToast(msg){
+  toastMsg = msg;
+  render();
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toastMsg = null; render(); }, 2600);
+}
+function askConfirm(message, onConfirm){
+  confirmState = { message, onConfirm };
+  render();
+}
+function cancelConfirm(){ confirmState = null; render(); }
+
+/* ---------------- schedule persistence ---------------- */
+async function persistSchedule(next){
+  schedule = next;
+  render();
+  try {
+    await idbSet("schedule", next);
+  } catch (e) {
+    showToast("Não consegui salvar a grade.");
+  }
+}
+
+/* ---------------- cell editing ---------------- */
+function openEditCell(day, slotId){
+  const c = schedule.cells[cellKey(day, slotId)];
+  editSubjectValue = c ? c.subject : "";
+  editColorValue = c ? c.color : PRESET_COLORS[0].bg;
+  editCell = { day, slotId };
+  render();
+}
+function onSubjectInput(v){ editSubjectValue = v; }
+function pickColor(bg){ editColorValue = bg; render(); }
+function closeEditCell(){ editCell = null; render(); }
+function saveEditCell(){
+  const name = (editSubjectValue || "").trim();
+  if (!name){ showToast("Dê um nome para a matéria."); return; }
+  const key = cellKey(editCell.day, editCell.slotId);
+  const prev = schedule.cells[key];
+  const nextCells = Object.assign({}, schedule.cells);
+  nextCells[key] = { subject: name, color: editColorValue, photoCount: prev ? (prev.photoCount||0) : 0 };
+  persistSchedule(Object.assign({}, schedule, { cells: nextCells }));
+  editCell = null;
+  render();
+}
+function requestDeleteCell(){
+  const key = cellKey(editCell.day, editCell.slotId);
+  const c = schedule.cells[key];
+  const count = c ? (c.photoCount||0) : 0;
+  const msg = count > 0
+    ? 'Remover "'+esc(c.subject)+'"? As '+count+' foto(s) salvas nesse horário também serão apagadas.'
+    : 'Remover "'+(c?esc(c.subject):"")+'" deste horário?';
+  askConfirm(msg, async () => {
+    if (count > 0){
+      try {
+        const keys = await idbKeysWithPrefix("photo_"+key+"_");
+        for (const k of keys) await idbDelete(k);
+      } catch(e){}
+    }
+    const nextCells = Object.assign({}, schedule.cells);
+    delete nextCells[key];
+    persistSchedule(Object.assign({}, schedule, { cells: nextCells }));
+    editCell = null;
+    confirmState = null;
+    render();
+  });
+}
+
+/* ---------------- move mode ---------------- */
+function toggleMoveMode(){
+  moveMode = !moveMode;
+  moveSource = null;
+  render();
+}
+function handleMoveTap(day, slotId){
+  const key = cellKey(day, slotId);
+  if (!moveSource){ moveSource = key; render(); return; }
+  if (moveSource === key){ moveSource = null; render(); return; }
+  const nextCells = Object.assign({}, schedule.cells);
+  const a = nextCells[moveSource];
+  const b = nextCells[key];
+  if (a) nextCells[key] = a; else delete nextCells[key];
+  if (b) nextCells[moveSource] = b; else delete nextCells[moveSource];
+  persistSchedule(Object.assign({}, schedule, { cells: nextCells }));
+  moveSource = null;
+  render();
+}
+function handleCellClick(day, slotId){
+  if (moveMode) return handleMoveTap(day, slotId);
+  const cell = schedule.cells[cellKey(day, slotId)];
+  if (cell) return openGallery(day, slotId);
+  return openEditCell(day, slotId);
+}
+
+/* ---------------- gallery ---------------- */
+async function openGallery(day, slotId){
+  galleryCell = { day, slotId };
+  selectedWeek = weekKeyOf(new Date().toISOString());
+  loadingPhotos = true;
+  photos = [];
+  render();
+  try {
+    const key = cellKey(day, slotId);
+    const keys = await idbKeysWithPrefix("photo_"+key+"_");
+    const items = [];
+    for (const k of keys){
+      try {
+        const val = await idbGet(k);
+        if (val) items.push({ key:k, ts: val.ts, img: val.img });
+      } catch(e){}
+    }
+    items.sort((a,b) => new Date(a.ts) - new Date(b.ts));
+    photos = items;
+  } catch(e){
+    showToast("Não consegui carregar as fotos.");
+  }
+  loadingPhotos = false;
+  render();
+}
+function closeGallery(){
+  galleryCell = null; photos = []; lightboxIndex = null; render();
+}
+function goPrevWeek(){
+  const thisWeek = weekKeyOf(new Date().toISOString());
+  const set = new Set(photos.map(p => weekKeyOf(p.ts))); set.add(thisWeek);
+  const weeks = Array.from(set).sort((a,b) => new Date(b) - new Date(a));
+  const idx = weeks.indexOf(selectedWeek); const safe = idx===-1?0:idx;
+  selectedWeek = weeks[safe+1] || weeks[safe];
+  render();
+}
+function goNextWeek(){
+  const thisWeek = weekKeyOf(new Date().toISOString());
+  const set = new Set(photos.map(p => weekKeyOf(p.ts))); set.add(thisWeek);
+  const weeks = Array.from(set).sort((a,b) => new Date(b) - new Date(a));
+  const idx = weeks.indexOf(selectedWeek); const safe = idx===-1?0:idx;
+  selectedWeek = weeks[safe-1] || weeks[safe];
+  render();
+}
+async function handleFiles(fileList){
+  if (!fileList || fileList.length===0 || !galleryCell) return;
+  uploading = true; render();
+  const key = cellKey(galleryCell.day, galleryCell.slotId);
+  let added = 0;
+  for (let i=0;i<fileList.length;i++){
+    try {
+      const raw = await readFileAsDataURL(fileList[i]);
+      const compressed = await compressImage(raw);
+      const id = Date.now()+i;
+      const ts = new Date(id).toISOString();
+      const storeKey = "photo_"+key+"_"+id;
+      await idbSet(storeKey, { ts, img: compressed });
+      photos.push({ key: storeKey, ts, img: compressed });
+      added++;
+    } catch(e){ /* skip broken file */ }
+  }
+  photos.sort((a,b) => new Date(a.ts) - new Date(b.ts));
+  if (added > 0){
+    const cur = schedule.cells[key];
+    const nextCells = Object.assign({}, schedule.cells);
+    nextCells[key] = Object.assign({}, cur, { photoCount: (cur.photoCount||0) + added });
+    persistSchedule(Object.assign({}, schedule, { cells: nextCells }));
+    selectedWeek = weekKeyOf(new Date().toISOString());
+    showToast(added===1 ? "Foto salva." : added+" fotos salvas.");
+  } else {
+    showToast("Não consegui salvar a foto.");
+  }
+  uploading = false;
+  render();
+}
+function requestDeletePhoto(photoKey){
+  const photo = photos.find(p => p.key === photoKey);
+  if (!photo) return;
+  askConfirm("Apagar esta foto?", async () => {
+    try {
+      await idbDelete(photo.key);
+      photos = photos.filter(p => p.key !== photo.key);
+      const key = cellKey(galleryCell.day, galleryCell.slotId);
+      const cur = schedule.cells[key];
+      const nextCells = Object.assign({}, schedule.cells);
+      nextCells[key] = Object.assign({}, cur, { photoCount: Math.max(0,(cur.photoCount||1)-1) });
+      persistSchedule(Object.assign({}, schedule, { cells: nextCells }));
+    } catch(e){
+      showToast("Não consegui apagar a foto.");
+    }
+    lightboxIndex = null;
+    confirmState = null;
+    render();
+  });
+}
+function openLightbox(photoKey){
+  lightboxIndex = photos.findIndex(p => p.key === photoKey);
+  render();
+}
+function closeLightbox(){ lightboxIndex = null; render(); }
+function lightboxPrev(){ if (lightboxIndex>0){ lightboxIndex--; render(); } }
+function lightboxNext(){ if (lightboxIndex<photos.length-1){ lightboxIndex++; render(); } }
+
+/* ---------------- settings ---------------- */
+function openSettings(){ settingsOpen = true; addSlotOpen = false; render(); }
+function closeSettings(){ settingsOpen = false; render(); }
+function toggleDay(idx){
+  const has = schedule.activeDays.includes(idx);
+  const next = has ? schedule.activeDays.filter(d=>d!==idx) : [...schedule.activeDays, idx].sort((a,b)=>a-b);
+  persistSchedule(Object.assign({}, schedule, { activeDays: next }));
+}
+function toggleAddSlot(){ addSlotOpen = !addSlotOpen; newSlotStart=""; newSlotEnd=""; render(); }
+function onSlotStartInput(v){ newSlotStart = v; }
+function onSlotEndInput(v){ newSlotEnd = v; }
+function addSlot(){
+  if (!newSlotStart || !newSlotEnd){ showToast("Preencha os dois horários."); return; }
+  const id = "s"+Date.now();
+  persistSchedule(Object.assign({}, schedule, { slots: [...schedule.slots, {id, start:newSlotStart, end:newSlotEnd}] }));
+  addSlotOpen = false; newSlotStart=""; newSlotEnd="";
+  render();
+}
+function requestRemoveSlot(slotId){
+  askConfirm("Remover este horário da grade? Os blocos dele serão removidos (as fotos continuam guardadas).", () => {
+    const nextCells = Object.assign({}, schedule.cells);
+    Object.keys(nextCells).forEach(k => { if (k.endsWith("_"+slotId)) delete nextCells[k]; });
+    persistSchedule(Object.assign({}, schedule, { slots: schedule.slots.filter(s=>s.id!==slotId), cells: nextCells }));
+    confirmState = null;
+    render();
+  });
+}
+function requestResetAll(){
+  askConfirm("Apagar toda a grade e todas as fotos? Essa ação não pode ser desfeita.", async () => {
+    try {
+      const keys = await idbKeysWithPrefix("photo_");
+      for (const k of keys) await idbDelete(k);
+    } catch(e){}
+    await persistSchedule(defaultSchedule());
+    settingsOpen = false;
+    confirmState = null;
+    showToast("Tudo apagado.");
+    render();
+  });
+}
+
+/* ---------------- render ---------------- */
+const app = document.getElementById("app");
+
+function render(){
+  if (loading || !schedule){
+    app.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+    return;
+  }
+  const activeDays = schedule.activeDays;
+  const hasAnyCell = Object.keys(schedule.cells).length > 0;
+
+  let html = '<div class="app-shell">' + renderHeader();
+  if (moveMode) html += renderMoveBanner();
+  else if (!hasAnyCell) html += renderEmptyBanner();
+  html += renderGrid(activeDays);
+  html += '</div>';
+
+  if (editCell) html += renderEditModal();
+  if (settingsOpen) html += renderSettingsModal();
+  if (galleryCell) html += renderGallery();
+  if (confirmState) html += renderConfirmModal();
+  if (toastMsg) html += '<div class="toast">'+esc(toastMsg)+'</div>';
+
+  app.innerHTML = html;
+}
+
+function renderHeader(){
+  return '<div class="header">' +
+    '<h1 class="oa-heading">Organizador de aulas</h1>' +
+    '<div class="header-actions">' +
+      '<button class="chip-btn'+(moveMode?' active':'')+'" onclick="toggleMoveMode()">'+ICONS.swap+(moveMode?"Movendo":"Mover")+'</button>' +
+      '<button class="icon-btn" onclick="openSettings()" aria-label="Configurações">'+ICONS.gear+'</button>' +
+    '</div>' +
+  '</div>';
+}
+function renderMoveBanner(){
+  return '<div class="banner move">Toque em uma aula e depois no horário para onde ela deve ir. As fotos ficam no horário original — só o nome e a cor trocam de lugar.</div>';
+}
+function renderEmptyBanner(){
+  return '<div class="banner empty">Toque em um horário vazio para adicionar uma matéria.</div>';
+}
+function renderGrid(activeDays){
+  let cols = '64px ' + activeDays.map(()=>"minmax(100px,1fr)").join(" ");
+  let html = '<div class="grid-wrap"><div class="grid" style="grid-template-columns:'+cols+';min-width:'+(64+activeDays.length*100)+'px;">';
+  html += '<div></div>';
+  activeDays.forEach(d => { html += '<div class="day-head">'+DAY_NAMES[d]+'</div>'; });
+
+  schedule.slots.forEach(slot => {
+    html += '<div class="time-label oa-time"><span>'+slot.start+'</span><span>'+slot.end+'</span></div>';
+    activeDays.forEach(d => {
+      const key = cellKey(d, slot.id);
+      const cell = schedule.cells[key];
+      const selected = moveSource === key;
+      let style = cell ? ('background:'+cell.color+';color:'+(PRESET_COLORS.find(c=>c.bg===cell.color)||{fg:"#fff"}).fg+';') : '';
+      html += '<div class="cell'+(cell?' filled':'')+(selected?' selected':'')+'" style="'+style+'" onclick="handleCellClick('+d+',\''+slot.id+'\')">';
+      if (cell){
+        html += '<span class="cell-subject">'+esc(cell.subject)+'</span>';
+        if (cell.photoCount > 0) html += '<span class="cell-count">'+cell.photoCount+' foto'+(cell.photoCount>1?'s':'')+'</span>';
+        if (!moveMode) html += '<span class="cell-edit" onclick="event.stopPropagation();openEditCell('+d+',\''+slot.id+'\')">'+ICONS.plus.replace('viewBox="0 0 24 24"','viewBox="0 0 24 24" style="transform:rotate(45deg)"')+'</span>';
+      } else {
+        html += ICONS.plus;
+      }
+      html += '</div>';
+    });
+  });
+  html += '</div></div>';
+  return html;
+}
+
+function renderEditModal(){
+  const slot = schedule.slots.find(s => s.id === editCell.slotId);
+  const key = cellKey(editCell.day, editCell.slotId);
+  const exists = !!schedule.cells[key];
+  let html = '<div class="overlay" onclick="if(event.target===this) closeEditCell()"><div class="modal">';
+  html += '<button class="close" onclick="closeEditCell()">'+ICONS.x+'</button>';
+  html += '<h2 class="oa-heading">'+DAY_NAMES[editCell.day]+' · '+(slot?slot.start+'–'+slot.end:'')+'</h2>';
+  html += '<label class="field-label">Nome da matéria</label>';
+  html += '<input class="text-input" id="subjectInput" value="'+esc(editSubjectValue)+'" placeholder="Ex: Cálculo I" oninput="onSubjectInput(this.value)" />';
+  html += '<label class="field-label">Cor</label><div class="swatches">';
+  PRESET_COLORS.forEach(c => {
+    const sel = editColorValue === c.bg;
+    html += '<button class="swatch" style="background:'+c.bg+';border-color:'+(sel?'#20242B':'transparent')+'" onclick="pickColor(\''+c.bg+'\')" aria-label="'+c.name+'">'+(sel?ICONS.check:'')+'</button>';
+  });
+  html += '</div>';
+  html += '<div class="row-gap"><button class="btn-primary" onclick="saveEditCell()">Salvar</button>';
+  if (exists) html += '<button class="btn-outline" style="color:#B24242" onclick="requestDeleteCell()">'+ICONS.trash+'</button>';
+  html += '</div></div></div>';
+  return html;
+}
+
+function renderSettingsModal(){
+  let html = '<div class="overlay" onclick="if(event.target===this) closeSettings()"><div class="modal">';
+  html += '<button class="close" onclick="closeSettings()">'+ICONS.x+'</button>';
+  html += '<h2 class="oa-heading">Configurações</h2>';
+  html += '<div class="field-label">Dias visíveis</div><div class="day-toggles">';
+  DAY_NAMES.forEach((name, idx) => {
+    const on = schedule.activeDays.includes(idx);
+    html += '<button class="day-toggle'+(on?' on':'')+'" onclick="toggleDay('+idx+')">'+name.slice(0,3)+'</button>';
+  });
+  html += '</div>';
+  html += '<div class="field-label">Horários</div><div style="margin-bottom:8px;">';
+  schedule.slots.forEach(s => {
+    html += '<div class="slot-row"><span class="oa-time">'+s.start+' – '+s.end+'</span>' +
+      '<button style="background:none;border:none;color:#B24242" onclick="requestRemoveSlot(\''+s.id+'\')">'+ICONS.trash+'</button></div>';
+  });
+  html += '</div>';
+  if (addSlotOpen){
+    html += '<div class="row-gap" style="margin-bottom:16px;">' +
+      '<input type="time" class="text-input" style="margin-bottom:0" value="'+esc(newSlotStart)+'" oninput="onSlotStartInput(this.value)" />' +
+      '<input type="time" class="text-input" style="margin-bottom:0" value="'+esc(newSlotEnd)+'" oninput="onSlotEndInput(this.value)" />' +
+      '<button class="btn-primary" style="flex:0 0 auto;padding:10px 14px" onclick="addSlot()">Ok</button>' +
+    '</div>';
+  } else {
+    html += '<button class="btn-outline" style="width:100%;border-style:dashed;color:var(--accent);display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:16px" onclick="toggleAddSlot()">'+ICONS.plus+' Adicionar horário</button>';
+  }
+  html += '<button class="btn-danger-outline" onclick="requestResetAll()">Apagar toda a grade e fotos</button>';
+  html += '</div></div>';
+  return html;
+}
+
+function renderConfirmModal(){
+  return '<div class="overlay"><div class="modal">' +
+    '<p style="font-size:14px;margin:0 0 16px;">'+esc(confirmState.message)+'</p>' +
+    '<div class="row-gap">' +
+      '<button class="btn-outline" style="flex:1" onclick="cancelConfirm()">Cancelar</button>' +
+      '<button class="btn-primary" style="background:#B24242" onclick="confirmState.onConfirm()">Confirmar</button>' +
+    '</div></div></div>';
+}
+
+function renderGallery(){
+  const cell = schedule.cells[cellKey(galleryCell.day, galleryCell.slotId)];
+  const slot = schedule.slots.find(s => s.id === galleryCell.slotId);
+  let html = '<div class="gallery-screen">';
+  html += '<div class="gallery-header"><button onclick="closeGallery()">'+ICONS.chevLeft+'</button><div>' +
+    '<div class="oa-heading" style="font-size:15px;">'+esc(cell?cell.subject:'')+'</div>' +
+    '<div class="oa-time" style="font-size:12px;color:#7A8190;">'+DAY_NAMES[galleryCell.day]+' · '+(slot?slot.start+'–'+slot.end:'')+'</div>' +
+  '</div></div>';
+
+  if (!loadingPhotos){
+    const thisWeek = weekKeyOf(new Date().toISOString());
+    const weekSet = new Set(photos.map(p => weekKeyOf(p.ts)));
+    weekSet.add(thisWeek);
+    const weeks = Array.from(weekSet).sort((a,b) => new Date(b) - new Date(a));
+    const idx = weeks.indexOf(selectedWeek);
+    const safeIdx = idx === -1 ? 0 : idx;
+    html += '<div class="week-nav">' +
+      '<button onclick="goPrevWeek()" '+(safeIdx>=weeks.length-1?'disabled':'')+'>'+ICONS.chevLeft+'</button>' +
+      '<div style="text-align:center"><div class="oa-time" style="font-size:13px;font-weight:600;">Semana de '+weekLabelOf(selectedWeek)+'</div>' +
+      (selectedWeek===thisWeek ? '<div style="font-size:10px;color:var(--accent)">Semana atual</div>' : '') + '</div>' +
+      '<button onclick="goNextWeek()" '+(safeIdx<=0?'disabled':'')+'>'+ICONS.chevRight+'</button>' +
+    '</div>';
+  }
+
+  html += '<div class="gallery-body">';
+  if (loadingPhotos){
+    html += '<div class="loading-wrap"><div class="spinner"></div></div>';
+  } else {
+    const weekPhotos = photos.filter(p => weekKeyOf(p.ts) === selectedWeek);
+    if (weekPhotos.length === 0){
+      html += '<div class="empty-gallery">'+ICONS.gallery+'<p style="margin-top:10px">Nenhuma foto nessa semana ainda.<br/>Toque em "Tirar foto" para começar.</p></div>';
+    } else {
+      groupByDate(weekPhotos).forEach(group => {
+        html += '<div class="date-group"><div class="date-group-label">'+fmtDate(group.date)+'</div><div class="photo-grid">';
+        group.items.forEach(p => {
+          html += '<button class="photo-thumb" onclick="openLightbox(\''+p.key+'\')"><img src="'+p.img+'" alt="Foto do quadro"/>' +
+            '<span class="photo-time oa-time">'+fmtTime(p.ts)+'</span></button>';
+        });
+        html += '</div></div>';
+      });
+    }
+  }
+  html += '</div>';
+
+  html += '<div class="gallery-footer">' +
+    '<label class="btn-primary" for="cameraInput" style="display:flex;align-items:center;justify-content:center;gap:8px;opacity:'+(uploading?0.7:1)+'">' +
+      (uploading ? '<span class="spinner" style="width:16px;height:16px;border-width:2px;"></span>' : ICONS.camera) + ' Tirar foto' +
+    '</label>' +
+    '<label class="btn-outline" for="galleryInput" style="display:flex;align-items:center;justify-content:center;opacity:'+(uploading?0.7:1)+'">'+ICONS.gallery+'</label>' +
+  '</div>';
+  html += '<input class="hidden-file" id="cameraInput" type="file" accept="image/*" capture="environment" onchange="handleFiles(this.files);this.value=\'\'" />';
+  html += '<input class="hidden-file" id="galleryInput" type="file" accept="image/*" multiple onchange="handleFiles(this.files);this.value=\'\'" />';
+
+  if (lightboxIndex !== null && photos[lightboxIndex]){
+    const p = photos[lightboxIndex];
+    html += '<div class="lightbox">' +
+      '<div class="lightbox-top"><span class="oa-time" style="font-size:12px;">'+fmtDate(p.ts)+' · '+fmtTime(p.ts)+'</span>' +
+      '<div style="display:flex;gap:16px;align-items:center;"><button onclick="requestDeletePhoto(\''+p.key+'\')">'+ICONS.trashLg+'</button>' +
+      '<button onclick="closeLightbox()">'+ICONS.xLg+'</button></div></div>' +
+      '<div class="lightbox-mid"><img src="'+p.img+'" alt="Foto do quadro"/></div>' +
+      '<div class="lightbox-nav">' +
+        '<button onclick="lightboxPrev()" '+(lightboxIndex===0?'disabled':'')+'>'+ICONS.chevLeftLg+'</button>' +
+        '<button onclick="lightboxNext()" '+(lightboxIndex===photos.length-1?'disabled':'')+'>'+ICONS.chevRightLg+'</button>' +
+      '</div></div>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+/* ---------------- init ---------------- */
+async function init(){
+  try {
+    db = await openDB();
+    const raw = await idbGet("schedule");
+    schedule = raw ? Object.assign(defaultSchedule(), raw) : defaultSchedule();
+  } catch(e){
+    schedule = defaultSchedule();
+  }
+  loading = false;
+  render();
+}
+init();
+
+if ("serviceWorker" in navigator){
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
