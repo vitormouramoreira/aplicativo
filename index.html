@@ -51,6 +51,7 @@
   .cell.filled{border:2px solid transparent;}
   .cell.selected{border:2px solid var(--accent) !important;}
   .cell-subject{font-size:13px;font-weight:600;line-height:1.2;}
+  .cell-room{font-size:10.5px;opacity:.85;margin-top:1px;}
   .cell-count{font-size:11px;opacity:.85;margin-top:3px;}
   .cell-edit{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.18);border-radius:999px;padding:4px;display:flex;}
   .overlay{position:fixed;inset:0;background:rgba(20,22,28,.45);z-index:55;display:flex;align-items:flex-end;justify-content:center;}
@@ -83,6 +84,7 @@
   .photo-thumb{position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--line);aspect-ratio:1/1;background:#fff;padding:0;}
   .photo-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
   .photo-time{position:absolute;bottom:3px;right:4px;font-size:10px;color:#fff;background:rgba(0,0,0,.5);padding:1px 4px;border-radius:4px;}
+  .photo-day{position:absolute;top:3px;left:4px;font-size:10px;color:#fff;background:rgba(59,76,184,.85);padding:1px 4px;border-radius:4px;}
   .empty-gallery{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 0;text-align:center;color:#7A8190;font-size:13px;}
   .gallery-footer{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line);}
   .lightbox{position:fixed;inset:0;background:rgba(15,16,20,.94);z-index:60;display:flex;flex-direction:column;}
@@ -96,6 +98,25 @@
   .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;
     padding:9px 16px;border-radius:999px;font-size:13px;z-index:70;box-shadow:0 6px 20px rgba(0,0,0,.2);}
   svg{display:block;}
+  .tasks-section{padding:6px 16px 24px;}
+  .tasks-header{font-size:15px;margin-bottom:10px;padding-top:6px;border-top:1px solid var(--line);}
+  .tasks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;}
+  .task-card{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;}
+  .task-card-head{padding:9px 12px;background:var(--paper-soft);}
+  .task-card-title{font-size:13px;font-weight:700;}
+  .task-list{padding:6px 10px;display:flex;flex-direction:column;min-height:8px;}
+  .task-empty{font-size:12px;color:#9AA0AA;padding:8px 2px;}
+  .task-item{display:flex;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px solid var(--paper-soft);}
+  .task-item:last-child{border-bottom:none;}
+  .task-check{width:18px;height:18px;flex:0 0 auto;border-radius:5px;border:1.5px solid var(--line);background:#fff;
+    display:flex;align-items:center;justify-content:center;color:var(--accent);padding:0;}
+  .task-check.checked{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .task-text{flex:1;font-size:13px;word-break:break-word;}
+  .task-text.done{text-decoration:line-through;color:#9AA0AA;}
+  .task-del{flex:0 0 auto;background:none;border:none;color:#B7BCC5;padding:2px;}
+  .task-add-row{display:flex;gap:6px;padding:8px 10px 10px;border-top:1px solid var(--paper-soft);}
+  .task-input{flex:1;border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:12.5px;outline:none;min-width:0;}
+  .task-add-btn{flex:0 0 auto;background:var(--accent-soft);color:var(--accent);border:none;border-radius:8px;padding:0 9px;display:flex;align-items:center;}
 </style>
 </head>
 <body>
@@ -147,6 +168,9 @@ let moveSource = null;
 let editCell = null;
 let editSubjectValue = "";
 let editColorValue = PRESET_COLORS[0].bg;
+let editRoomValue = "";
+
+let tasksBySubject = {}; // norm -> [{id, text, done}]
 
 let settingsOpen = false;
 let addSlotOpen = false;
@@ -167,6 +191,9 @@ let toastTimer = null;
 /* ---------------- helpers ---------------- */
 function esc(s){
   return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function attrId(s){
+  return esc(String(s).replace(/\\/g,"\\\\").replace(/'/g,"\\'"));
 }
 function cellKey(day, slotId){ return day + "_" + slotId; }
 function defaultSchedule(){
@@ -297,6 +324,84 @@ function askConfirm(message, onConfirm){
 }
 function cancelConfirm(){ confirmState = null; render(); }
 
+/* ---------------- linked subjects (same name across days) ---------------- */
+function linkedCellEntries(subjectName){
+  const norm = (subjectName||"").trim().toLowerCase();
+  const entries = [];
+  if (!norm) return entries;
+  Object.keys(schedule.cells).forEach(k => {
+    const c = schedule.cells[k];
+    if (c.subject.trim().toLowerCase() === norm){
+      const idx = k.indexOf("_");
+      entries.push({ day: Number(k.slice(0, idx)), slotId: k.slice(idx+1), key: k });
+    }
+  });
+  entries.sort((a,b) => a.day - b.day);
+  return entries;
+}
+function findMatchingSubjectCell(name, excludeKey){
+  const norm = (name||"").trim().toLowerCase();
+  if (!norm) return null;
+  for (const k in schedule.cells){
+    if (k === excludeKey) continue;
+    if (schedule.cells[k].subject.trim().toLowerCase() === norm) return schedule.cells[k];
+  }
+  return null;
+}
+function aggregatePhotoCount(subjectName){
+  return linkedCellEntries(subjectName).reduce((sum, e) => {
+    const c = schedule.cells[e.key];
+    return sum + (c ? (c.photoCount||0) : 0);
+  }, 0);
+}
+
+/* ---------------- tasks (pendências) ---------------- */
+function uniqueSubjects(){
+  const map = {};
+  Object.values(schedule.cells).forEach(c => {
+    const norm = c.subject.trim().toLowerCase();
+    if (!map[norm]) map[norm] = { name: c.subject, color: c.color, norm };
+  });
+  return Object.values(map).sort((a,b) => a.name.localeCompare(b.name, "pt-BR"));
+}
+async function loadAllTasks(){
+  const subjects = uniqueSubjects();
+  for (const s of subjects){
+    try {
+      const val = await idbGet("tasks_"+s.norm);
+      tasksBySubject[s.norm] = val || [];
+    } catch(e){
+      tasksBySubject[s.norm] = [];
+    }
+  }
+}
+function addTaskFromInput(norm){
+  const el = document.getElementById("taskInput_"+norm);
+  if (!el) return;
+  const text = el.value.trim();
+  if (!text) return;
+  addTask(norm, text);
+}
+function addTask(norm, text){
+  const list = (tasksBySubject[norm] || []).slice();
+  list.push({ id: Date.now()+"_"+Math.random().toString(36).slice(2,7), text, done:false });
+  tasksBySubject[norm] = list;
+  render();
+  idbSet("tasks_"+norm, list).catch(() => showToast("Não consegui salvar a pendência."));
+}
+function toggleTask(norm, id){
+  const list = (tasksBySubject[norm] || []).map(t => t.id===id ? Object.assign({}, t, {done: !t.done}) : t);
+  tasksBySubject[norm] = list;
+  render();
+  idbSet("tasks_"+norm, list).catch(() => {});
+}
+function deleteTask(norm, id){
+  const list = (tasksBySubject[norm] || []).filter(t => t.id !== id);
+  tasksBySubject[norm] = list;
+  render();
+  idbSet("tasks_"+norm, list).catch(() => {});
+}
+
 /* ---------------- schedule persistence ---------------- */
 async function persistSchedule(next){
   schedule = next;
@@ -313,10 +418,25 @@ function openEditCell(day, slotId){
   const c = schedule.cells[cellKey(day, slotId)];
   editSubjectValue = c ? c.subject : "";
   editColorValue = c ? c.color : PRESET_COLORS[0].bg;
+  editRoomValue = c ? (c.room || "") : "";
   editCell = { day, slotId };
   render();
 }
-function onSubjectInput(v){ editSubjectValue = v; }
+function onRoomInput(v){ editRoomValue = v; }
+function onSubjectInput(v){
+  editSubjectValue = v;
+  const key = cellKey(editCell.day, editCell.slotId);
+  const match = findMatchingSubjectCell(v, key);
+  const hintEl = document.getElementById("linkHint");
+  if (hintEl){
+    if (match){
+      hintEl.textContent = 'Vai juntar com as fotos de "' + match.subject + '" (mesmo nome já usado em outro dia).';
+      hintEl.style.display = "block";
+    } else {
+      hintEl.style.display = "none";
+    }
+  }
+}
 function pickColor(bg){ editColorValue = bg; render(); }
 function closeEditCell(){ editCell = null; render(); }
 function saveEditCell(){
@@ -324,10 +444,16 @@ function saveEditCell(){
   if (!name){ showToast("Dê um nome para a matéria."); return; }
   const key = cellKey(editCell.day, editCell.slotId);
   const prev = schedule.cells[key];
+  const match = findMatchingSubjectCell(name, key);
+  const color = match ? match.color : editColorValue;
+  const room = (editRoomValue || "").trim();
   const nextCells = Object.assign({}, schedule.cells);
-  nextCells[key] = { subject: name, color: editColorValue, photoCount: prev ? (prev.photoCount||0) : 0 };
+  nextCells[key] = { subject: name, color, room, photoCount: prev ? (prev.photoCount||0) : 0 };
   persistSchedule(Object.assign({}, schedule, { cells: nextCells }));
+  const norm = name.toLowerCase();
+  if (!tasksBySubject[norm]) tasksBySubject[norm] = [];
   editCell = null;
+  if (match) showToast('Matéria combinada com "' + match.subject + '".');
   render();
 }
 function requestDeleteCell(){
@@ -387,14 +513,17 @@ async function openGallery(day, slotId){
   photos = [];
   render();
   try {
-    const key = cellKey(day, slotId);
-    const keys = await idbKeysWithPrefix("photo_"+key+"_");
+    const cell = schedule.cells[cellKey(day, slotId)];
+    const linked = cell ? linkedCellEntries(cell.subject) : [{ day, slotId, key: cellKey(day, slotId) }];
     const items = [];
-    for (const k of keys){
-      try {
-        const val = await idbGet(k);
-        if (val) items.push({ key:k, ts: val.ts, img: val.img });
-      } catch(e){}
+    for (const entry of linked){
+      const keys = await idbKeysWithPrefix("photo_"+entry.key+"_");
+      for (const k of keys){
+        try {
+          const val = await idbGet(k);
+          if (val) items.push({ key:k, ts: val.ts, img: val.img, day: entry.day, slotId: entry.slotId });
+        } catch(e){}
+      }
     }
     items.sort((a,b) => new Date(a.ts) - new Date(b.ts));
     photos = items;
@@ -426,7 +555,12 @@ function goNextWeek(){
 async function handleFiles(fileList){
   if (!fileList || fileList.length===0 || !galleryCell) return;
   uploading = true; render();
-  const key = cellKey(galleryCell.day, galleryCell.slotId);
+  const openedCell = schedule.cells[cellKey(galleryCell.day, galleryCell.slotId)];
+  const linked = openedCell ? linkedCellEntries(openedCell.subject) : [{ day: galleryCell.day, slotId: galleryCell.slotId }];
+  const jsDay = new Date().getDay();
+  const ourDay = jsDay === 0 ? 6 : jsDay - 1;
+  const target = linked.find(e => e.day === ourDay) || { day: galleryCell.day, slotId: galleryCell.slotId };
+  const key = cellKey(target.day, target.slotId);
   let added = 0;
   for (let i=0;i<fileList.length;i++){
     try {
@@ -436,7 +570,7 @@ async function handleFiles(fileList){
       const ts = new Date(id).toISOString();
       const storeKey = "photo_"+key+"_"+id;
       await idbSet(storeKey, { ts, img: compressed });
-      photos.push({ key: storeKey, ts, img: compressed });
+      photos.push({ key: storeKey, ts, img: compressed, day: target.day, slotId: target.slotId });
       added++;
     } catch(e){ /* skip broken file */ }
   }
@@ -461,11 +595,13 @@ function requestDeletePhoto(photoKey){
     try {
       await idbDelete(photo.key);
       photos = photos.filter(p => p.key !== photo.key);
-      const key = cellKey(galleryCell.day, galleryCell.slotId);
+      const key = cellKey(photo.day, photo.slotId);
       const cur = schedule.cells[key];
-      const nextCells = Object.assign({}, schedule.cells);
-      nextCells[key] = Object.assign({}, cur, { photoCount: Math.max(0,(cur.photoCount||1)-1) });
-      persistSchedule(Object.assign({}, schedule, { cells: nextCells }));
+      if (cur){
+        const nextCells = Object.assign({}, schedule.cells);
+        nextCells[key] = Object.assign({}, cur, { photoCount: Math.max(0,(cur.photoCount||1)-1) });
+        persistSchedule(Object.assign({}, schedule, { cells: nextCells }));
+      }
     } catch(e){
       showToast("Não consegui apagar a foto.");
     }
@@ -538,6 +674,7 @@ function render(){
   if (moveMode) html += renderMoveBanner();
   else if (!hasAnyCell) html += renderEmptyBanner();
   html += renderGrid(activeDays);
+  html += renderTasksSection();
   html += '</div>';
 
   if (editCell) html += renderEditModal();
@@ -580,13 +717,45 @@ function renderGrid(activeDays){
       html += '<div class="cell'+(cell?' filled':'')+(selected?' selected':'')+'" style="'+style+'" onclick="handleCellClick('+d+',\''+slot.id+'\')">';
       if (cell){
         html += '<span class="cell-subject">'+esc(cell.subject)+'</span>';
-        if (cell.photoCount > 0) html += '<span class="cell-count">'+cell.photoCount+' foto'+(cell.photoCount>1?'s':'')+'</span>';
+        if (cell.room) html += '<span class="cell-room">'+esc(cell.room)+'</span>';
+        const aggCount = aggregatePhotoCount(cell.subject);
+        if (aggCount > 0) html += '<span class="cell-count">'+aggCount+' foto'+(aggCount>1?'s':'')+'</span>';
         if (!moveMode) html += '<span class="cell-edit" onclick="event.stopPropagation();openEditCell('+d+',\''+slot.id+'\')">'+ICONS.plus.replace('viewBox="0 0 24 24"','viewBox="0 0 24 24" style="transform:rotate(45deg)"')+'</span>';
       } else {
         html += ICONS.plus;
       }
       html += '</div>';
     });
+  });
+  html += '</div></div>';
+  return html;
+}
+
+function renderTasksSection(){
+  const subjects = uniqueSubjects();
+  if (subjects.length === 0) return "";
+  let html = '<div class="tasks-section"><div class="tasks-header oa-heading">Pendências</div><div class="tasks-grid">';
+  subjects.forEach(s => {
+    const list = tasksBySubject[s.norm] || [];
+    const safeNorm = attrId(s.norm);
+    html += '<div class="task-card"><div class="task-card-head" style="border-left:4px solid '+s.color+'">' +
+      '<span class="task-card-title">'+esc(s.name)+'</span></div><div class="task-list">';
+    if (list.length === 0){
+      html += '<div class="task-empty">Nenhuma pendência ainda.</div>';
+    } else {
+      list.forEach(t => {
+        const safeId = attrId(t.id);
+        html += '<div class="task-item">' +
+          '<button class="task-check'+(t.done?' checked':'')+'" onclick="toggleTask(\''+safeNorm+'\',\''+safeId+'\')">'+(t.done?ICONS.check:'')+'</button>' +
+          '<span class="task-text'+(t.done?' done':'')+'">'+esc(t.text)+'</span>' +
+          '<button class="task-del" onclick="deleteTask(\''+safeNorm+'\',\''+safeId+'\')">'+ICONS.x+'</button>' +
+        '</div>';
+      });
+    }
+    html += '</div><div class="task-add-row">' +
+      '<input class="task-input" id="taskInput_'+esc(s.norm)+'" placeholder="Adicionar pendência..." onkeydown="if(event.key===\'Enter\'){addTaskFromInput(\''+safeNorm+'\');this.value=\'\';}" />' +
+      '<button class="task-add-btn" onclick="addTaskFromInput(\''+safeNorm+'\');document.getElementById(\'taskInput_'+safeNorm+'\').value=\'\';">'+ICONS.plus+'</button>' +
+    '</div></div>';
   });
   html += '</div></div>';
   return html;
@@ -601,6 +770,9 @@ function renderEditModal(){
   html += '<h2 class="oa-heading">'+DAY_NAMES[editCell.day]+' · '+(slot?slot.start+'–'+slot.end:'')+'</h2>';
   html += '<label class="field-label">Nome da matéria</label>';
   html += '<input class="text-input" id="subjectInput" value="'+esc(editSubjectValue)+'" placeholder="Ex: Cálculo I" oninput="onSubjectInput(this.value)" />';
+  html += '<div id="linkHint" style="font-size:12px;color:var(--accent);margin:-8px 0 12px;display:none;"></div>';
+  html += '<label class="field-label">Sala / descrição (opcional)</label>';
+  html += '<input class="text-input" id="roomInput" value="'+esc(editRoomValue)+'" placeholder="Ex: Sala 204" oninput="onRoomInput(this.value)" />';
   html += '<label class="field-label">Cor</label><div class="swatches">';
   PRESET_COLORS.forEach(c => {
     const sel = editColorValue === c.bg;
@@ -654,11 +826,21 @@ function renderConfirmModal(){
 
 function renderGallery(){
   const cell = schedule.cells[cellKey(galleryCell.day, galleryCell.slotId)];
-  const slot = schedule.slots.find(s => s.id === galleryCell.slotId);
+  const linked = cell ? linkedCellEntries(cell.subject) : [];
+  let subtitle;
+  if (linked.length > 1){
+    subtitle = linked.map(e => {
+      const s = schedule.slots.find(s => s.id === e.slotId);
+      return DAY_NAMES[e.day].slice(0,3) + ' ' + (s ? s.start+'–'+s.end : '');
+    }).join(', ');
+  } else {
+    const slot = schedule.slots.find(s => s.id === galleryCell.slotId);
+    subtitle = DAY_NAMES[galleryCell.day] + ' · ' + (slot ? slot.start+'–'+slot.end : '');
+  }
   let html = '<div class="gallery-screen">';
   html += '<div class="gallery-header"><button onclick="closeGallery()">'+ICONS.chevLeft+'</button><div>' +
     '<div class="oa-heading" style="font-size:15px;">'+esc(cell?cell.subject:'')+'</div>' +
-    '<div class="oa-time" style="font-size:12px;color:#7A8190;">'+DAY_NAMES[galleryCell.day]+' · '+(slot?slot.start+'–'+slot.end:'')+'</div>' +
+    '<div class="oa-time" style="font-size:12px;color:#7A8190;">'+subtitle+'</div>' +
   '</div></div>';
 
   if (!loadingPhotos){
@@ -688,6 +870,7 @@ function renderGallery(){
         html += '<div class="date-group"><div class="date-group-label">'+fmtDate(group.date)+'</div><div class="photo-grid">';
         group.items.forEach(p => {
           html += '<button class="photo-thumb" onclick="openLightbox(\''+p.key+'\')"><img src="'+p.img+'" alt="Foto do quadro"/>' +
+            (linked.length > 1 ? '<span class="photo-day oa-time">'+DAY_NAMES[p.day].slice(0,3)+'</span>' : '') +
             '<span class="photo-time oa-time">'+fmtTime(p.ts)+'</span></button>';
         });
         html += '</div></div>';
@@ -728,8 +911,9 @@ async function init(){
     db = await openDB();
     const raw = await idbGet("schedule");
     schedule = raw ? Object.assign(defaultSchedule(), raw) : defaultSchedule();
+    await loadAllTasks();
   } catch(e){
-    schedule = defaultSchedule();
+    schedule = schedule || defaultSchedule();
   }
   loading = false;
   render();
