@@ -111,9 +111,12 @@
   .task-check{width:18px;height:18px;flex:0 0 auto;border-radius:5px;border:1.5px solid var(--line);background:#fff;
     display:flex;align-items:center;justify-content:center;color:var(--accent);padding:0;}
   .task-check.checked{background:var(--accent);border-color:var(--accent);color:#fff;}
-  .task-text{flex:1;font-size:13px;word-break:break-word;}
+  .task-text{flex:1;font-size:13px;word-break:break-word;cursor:pointer;}
   .task-text.done{text-decoration:line-through;color:#9AA0AA;}
+  .task-icon-btn{flex:0 0 auto;background:none;border:none;color:#9AA0AA;padding:3px;}
   .task-del{flex:0 0 auto;background:none;border:none;color:#B7BCC5;padding:2px;}
+  .task-item.editing{gap:6px;}
+  .task-edit-input{flex:1;border:1px solid var(--accent);border-radius:6px;padding:4px 8px;font-size:13px;outline:none;min-width:0;background:#fff;}
   .task-add-row{display:flex;gap:6px;padding:8px 10px 10px;border-top:1px solid var(--paper-soft);}
   .task-input{flex:1;border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:12.5px;outline:none;min-width:0;}
   .task-add-btn{flex:0 0 auto;background:var(--accent-soft);color:var(--accent);border:none;border-radius:8px;padding:0 9px;display:flex;align-items:center;}
@@ -155,6 +158,7 @@ const ICONS = {
   chevRight: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
   chevRightLg: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
   check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+  pencil: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>',
 };
 
 /* ---------------- state ---------------- */
@@ -171,6 +175,8 @@ let editColorValue = PRESET_COLORS[0].bg;
 let editRoomValue = "";
 
 let tasksBySubject = {}; // norm -> [{id, text, done}]
+let editingTask = null; // { norm, id }
+let editingTaskValue = "";
 
 let settingsOpen = false;
 let addSlotOpen = false;
@@ -398,6 +404,26 @@ function toggleTask(norm, id){
 function deleteTask(norm, id){
   const list = (tasksBySubject[norm] || []).filter(t => t.id !== id);
   tasksBySubject[norm] = list;
+  render();
+  idbSet("tasks_"+norm, list).catch(() => {});
+}
+function startEditTask(norm, id){
+  const t = (tasksBySubject[norm] || []).find(x => x.id === id);
+  if (!t) return;
+  editingTask = { norm, id };
+  editingTaskValue = t.text;
+  render();
+}
+function onEditTaskInput(v){ editingTaskValue = v; }
+function cancelEditTask(){ editingTask = null; render(); }
+function saveEditTask(){
+  if (!editingTask) return;
+  const { norm, id } = editingTask;
+  const text = (editingTaskValue || "").trim();
+  if (!text){ showToast("A pendência não pode ficar vazia."); return; }
+  const list = (tasksBySubject[norm] || []).map(t => t.id === id ? Object.assign({}, t, { text }) : t);
+  tasksBySubject[norm] = list;
+  editingTask = null;
   render();
   idbSet("tasks_"+norm, list).catch(() => {});
 }
@@ -684,6 +710,11 @@ function render(){
   if (toastMsg) html += '<div class="toast">'+esc(toastMsg)+'</div>';
 
   app.innerHTML = html;
+
+  if (editingTask){
+    const el = document.getElementById("taskEditInput_"+editingTask.id);
+    if (el){ el.focus(); const len = el.value.length; el.setSelectionRange(len, len); }
+  }
 }
 
 function renderHeader(){
@@ -734,6 +765,12 @@ function renderGrid(activeDays){
 function renderTasksSection(){
   const subjects = uniqueSubjects();
   if (subjects.length === 0) return "";
+  subjects.sort((a,b) => {
+    const aHas = (tasksBySubject[a.norm]||[]).length > 0;
+    const bHas = (tasksBySubject[b.norm]||[]).length > 0;
+    if (aHas !== bHas) return aHas ? -1 : 1;
+    return a.name.localeCompare(b.name, "pt-BR");
+  });
   let html = '<div class="tasks-section"><div class="tasks-header oa-heading">Pendências</div><div class="tasks-grid">';
   subjects.forEach(s => {
     const list = tasksBySubject[s.norm] || [];
@@ -745,11 +782,21 @@ function renderTasksSection(){
     } else {
       list.forEach(t => {
         const safeId = attrId(t.id);
-        html += '<div class="task-item">' +
-          '<button class="task-check'+(t.done?' checked':'')+'" onclick="toggleTask(\''+safeNorm+'\',\''+safeId+'\')">'+(t.done?ICONS.check:'')+'</button>' +
-          '<span class="task-text'+(t.done?' done':'')+'">'+esc(t.text)+'</span>' +
-          '<button class="task-del" onclick="deleteTask(\''+safeNorm+'\',\''+safeId+'\')">'+ICONS.x+'</button>' +
-        '</div>';
+        const isEditing = editingTask && editingTask.norm === s.norm && editingTask.id === t.id;
+        if (isEditing){
+          html += '<div class="task-item editing">' +
+            '<input class="task-edit-input" id="taskEditInput_'+esc(t.id)+'" value="'+esc(editingTaskValue)+'" oninput="onEditTaskInput(this.value)" onkeydown="if(event.key===\'Enter\')saveEditTask();if(event.key===\'Escape\')cancelEditTask();" />' +
+            '<button class="task-icon-btn" onclick="saveEditTask()">'+ICONS.check+'</button>' +
+            '<button class="task-icon-btn" onclick="cancelEditTask()">'+ICONS.x+'</button>' +
+          '</div>';
+        } else {
+          html += '<div class="task-item">' +
+            '<button class="task-check'+(t.done?' checked':'')+'" onclick="toggleTask(\''+safeNorm+'\',\''+safeId+'\')">'+(t.done?ICONS.check:'')+'</button>' +
+            '<span class="task-text'+(t.done?' done':'')+'" onclick="startEditTask(\''+safeNorm+'\',\''+safeId+'\')">'+esc(t.text)+'</span>' +
+            '<button class="task-icon-btn" onclick="startEditTask(\''+safeNorm+'\',\''+safeId+'\')">'+ICONS.pencil+'</button>' +
+            '<button class="task-del" onclick="deleteTask(\''+safeNorm+'\',\''+safeId+'\')">'+ICONS.x+'</button>' +
+          '</div>';
+        }
       });
     }
     html += '</div><div class="task-add-row">' +
