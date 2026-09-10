@@ -67,6 +67,7 @@
   .btn-primary{flex:1;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:10px;font-size:14px;font-weight:600;}
   .btn-outline{border:1px solid var(--line);background:transparent;border-radius:10px;padding:10px 14px;font-size:14px;color:var(--ink);}
   .btn-danger-outline{border:1px solid #E3B3B3;color:var(--danger);background:transparent;border-radius:10px;padding:10px;font-size:14px;width:100%;}
+  .btn-primary:disabled,.btn-outline:disabled{opacity:.45;}
   .day-toggles{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;}
   .day-toggle{padding:6px 10px;border-radius:999px;font-size:12px;border:1px solid var(--line);background:transparent;color:#7A8190;}
   .day-toggle.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);}
@@ -85,6 +86,13 @@
   .photo-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
   .photo-time{position:absolute;bottom:3px;right:4px;font-size:10px;color:#fff;background:rgba(0,0,0,.5);padding:1px 4px;border-radius:4px;}
   .photo-day{position:absolute;top:3px;left:4px;font-size:10px;color:#fff;background:rgba(59,76,184,.85);padding:1px 4px;border-radius:4px;}
+  .photo-thumb.selected{outline:3px solid var(--accent);outline-offset:-3px;}
+  .photo-select-dot{position:absolute;top:5px;right:5px;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.85);
+    border:1.5px solid var(--accent);display:flex;align-items:center;justify-content:center;color:var(--accent);}
+  .photo-select-dot.on{background:var(--accent);color:#fff;}
+  .select-all-link{background:none;border:none;color:var(--accent);font-size:12.5px;padding:0 0 12px;text-align:left;}
+  .select-footer{align-items:center;gap:10px;}
+  .select-count{font-size:12.5px;color:#7A8190;white-space:nowrap;}
   .empty-gallery{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 0;text-align:center;color:#7A8190;font-size:13px;}
   .gallery-footer{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line);}
   .lightbox{position:fixed;inset:0;background:rgba(15,16,20,.94);z-index:60;display:flex;flex-direction:column;}
@@ -113,12 +121,17 @@
   .task-check.checked{background:var(--accent);border-color:var(--accent);color:#fff;}
   .task-text{flex:1;font-size:13px;word-break:break-word;cursor:pointer;}
   .task-text.done{text-decoration:line-through;color:#9AA0AA;}
+  .task-text-wrap{flex:1;display:flex;flex-direction:column;min-width:0;}
+  .task-due{font-size:10.5px;color:#7A8190;margin-top:1px;}
+  .task-due.urgent{color:var(--danger);font-weight:600;}
   .task-icon-btn{flex:0 0 auto;background:none;border:none;color:#9AA0AA;padding:3px;}
   .task-del{flex:0 0 auto;background:none;border:none;color:#B7BCC5;padding:2px;}
-  .task-item.editing{gap:6px;}
-  .task-edit-input{flex:1;border:1px solid var(--accent);border-radius:6px;padding:4px 8px;font-size:13px;outline:none;min-width:0;background:#fff;}
-  .task-add-row{display:flex;gap:6px;padding:8px 10px 10px;border-top:1px solid var(--paper-soft);}
-  .task-input{flex:1;border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:12.5px;outline:none;min-width:0;}
+  .task-item.editing{gap:6px;flex-wrap:wrap;}
+  .task-edit-input{flex:1 1 100%;border:1px solid var(--accent);border-radius:6px;padding:4px 8px;font-size:13px;outline:none;min-width:0;background:#fff;}
+  .task-edit-date{flex:1;border:1px solid var(--accent);border-radius:6px;padding:3px 6px;font-size:12px;outline:none;background:#fff;color:var(--ink);}
+  .task-add-row{display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px 10px;border-top:1px solid var(--paper-soft);}
+  .task-input{flex:1 1 100%;border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:12.5px;outline:none;min-width:0;}
+  .task-date-input{flex:1;border:1px solid var(--line);border-radius:8px;padding:5px 7px;font-size:11.5px;outline:none;color:var(--ink);min-width:0;}
   .task-add-btn{flex:0 0 auto;background:var(--accent-soft);color:var(--accent);border:none;border-radius:8px;padding:0 9px;display:flex;align-items:center;}
 </style>
 </head>
@@ -159,6 +172,8 @@ const ICONS = {
   chevRightLg: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
   check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
   pencil: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>',
+  share: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>',
+  download: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
 };
 
 /* ---------------- state ---------------- */
@@ -174,9 +189,10 @@ let editSubjectValue = "";
 let editColorValue = PRESET_COLORS[0].bg;
 let editRoomValue = "";
 
-let tasksBySubject = {}; // norm -> [{id, text, done}]
+let tasksBySubject = {}; // norm -> [{id, text, done, due}]
 let editingTask = null; // { norm, id }
 let editingTaskValue = "";
+let editingTaskDue = "";
 
 let settingsOpen = false;
 let addSlotOpen = false;
@@ -189,6 +205,8 @@ let selectedWeek = null;
 let loadingPhotos = false;
 let uploading = false;
 let lightboxIndex = null;
+let selectMode = false;
+let selectedPhotoKeys = new Set();
 
 let confirmState = null; // { message, onConfirm }
 let toastMsg = null;
@@ -382,15 +400,19 @@ async function loadAllTasks(){
   }
 }
 function addTaskFromInput(norm){
-  const el = document.getElementById("taskInput_"+norm);
-  if (!el) return;
-  const text = el.value.trim();
+  const textEl = document.getElementById("taskInput_"+norm);
+  const dateEl = document.getElementById("taskDateInput_"+norm);
+  if (!textEl) return;
+  const text = textEl.value.trim();
   if (!text) return;
-  addTask(norm, text);
+  const due = dateEl && dateEl.value ? dateEl.value : null;
+  addTask(norm, text, due);
+  textEl.value = "";
+  if (dateEl) dateEl.value = "";
 }
-function addTask(norm, text){
+function addTask(norm, text, due){
   const list = (tasksBySubject[norm] || []).slice();
-  list.push({ id: Date.now()+"_"+Math.random().toString(36).slice(2,7), text, done:false });
+  list.push({ id: Date.now()+"_"+Math.random().toString(36).slice(2,7), text, done:false, due: due || null });
   tasksBySubject[norm] = list;
   render();
   idbSet("tasks_"+norm, list).catch(() => showToast("Não consegui salvar a pendência."));
@@ -412,16 +434,19 @@ function startEditTask(norm, id){
   if (!t) return;
   editingTask = { norm, id };
   editingTaskValue = t.text;
+  editingTaskDue = t.due || "";
   render();
 }
 function onEditTaskInput(v){ editingTaskValue = v; }
+function onEditTaskDateInput(v){ editingTaskDue = v; }
 function cancelEditTask(){ editingTask = null; render(); }
 function saveEditTask(){
   if (!editingTask) return;
   const { norm, id } = editingTask;
   const text = (editingTaskValue || "").trim();
   if (!text){ showToast("A pendência não pode ficar vazia."); return; }
-  const list = (tasksBySubject[norm] || []).map(t => t.id === id ? Object.assign({}, t, { text }) : t);
+  const due = editingTaskDue || null;
+  const list = (tasksBySubject[norm] || []).map(t => t.id === id ? Object.assign({}, t, { text, due }) : t);
   tasksBySubject[norm] = list;
   editingTask = null;
   render();
@@ -537,6 +562,8 @@ async function openGallery(day, slotId){
   selectedWeek = weekKeyOf(new Date().toISOString());
   loadingPhotos = true;
   photos = [];
+  selectMode = false;
+  selectedPhotoKeys = new Set();
   render();
   try {
     const cell = schedule.cells[cellKey(day, slotId)];
@@ -560,7 +587,9 @@ async function openGallery(day, slotId){
   render();
 }
 function closeGallery(){
-  galleryCell = null; photos = []; lightboxIndex = null; render();
+  galleryCell = null; photos = []; lightboxIndex = null;
+  selectMode = false; selectedPhotoKeys = new Set();
+  render();
 }
 function goPrevWeek(){
   const thisWeek = weekKeyOf(new Date().toISOString());
@@ -568,6 +597,7 @@ function goPrevWeek(){
   const weeks = Array.from(set).sort((a,b) => new Date(b) - new Date(a));
   const idx = weeks.indexOf(selectedWeek); const safe = idx===-1?0:idx;
   selectedWeek = weeks[safe+1] || weeks[safe];
+  selectedPhotoKeys = new Set();
   render();
 }
 function goNextWeek(){
@@ -576,8 +606,139 @@ function goNextWeek(){
   const weeks = Array.from(set).sort((a,b) => new Date(b) - new Date(a));
   const idx = weeks.indexOf(selectedWeek); const safe = idx===-1?0:idx;
   selectedWeek = weeks[safe-1] || weeks[safe];
+  selectedPhotoKeys = new Set();
   render();
 }
+
+/* ---------------- multi-select / share / download ---------------- */
+function toggleSelectMode(){
+  selectMode = !selectMode;
+  selectedPhotoKeys = new Set();
+  render();
+}
+function togglePhotoSelect(key){
+  if (selectedPhotoKeys.has(key)) selectedPhotoKeys.delete(key);
+  else selectedPhotoKeys.add(key);
+  render();
+}
+function selectAllInWeek(){
+  photos.filter(p => weekKeyOf(p.ts) === selectedWeek).forEach(p => selectedPhotoKeys.add(p.key));
+  render();
+}
+function dataUrlToUint8Array(dataUrl){
+  const base64 = dataUrl.split(",")[1];
+  const binStr = atob(base64);
+  const bytes = new Uint8Array(binStr.length);
+  for (let i=0;i<binStr.length;i++) bytes[i] = binStr.charCodeAt(i);
+  return bytes;
+}
+function crc32(bytes){
+  let crc = 0xFFFFFFFF;
+  for (let i=0;i<bytes.length;i++){
+    crc ^= bytes[i];
+    for (let j=0;j<8;j++){
+      crc = (crc >>> 1) ^ (0xEDB88320 & -(crc & 1));
+    }
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+function dosDateTime(date){
+  const time = ((date.getHours() & 0x1F) << 11) | ((date.getMinutes() & 0x3F) << 5) | (Math.floor(date.getSeconds()/2) & 0x1F);
+  const d = (((date.getFullYear()-1980) & 0x7F) << 9) | (((date.getMonth()+1) & 0xF) << 5) | (date.getDate() & 0x1F);
+  return { time, d };
+}
+function w16(arr, off, v){ arr[off]=v&0xFF; arr[off+1]=(v>>>8)&0xFF; }
+function w32(arr, off, v){ arr[off]=v&0xFF; arr[off+1]=(v>>>8)&0xFF; arr[off+2]=(v>>>16)&0xFF; arr[off+3]=(v>>>24)&0xFF; }
+function buildZip(entries){
+  const localParts = []; const centralParts = []; let offset = 0;
+  entries.forEach(e => {
+    const nameBytes = new TextEncoder().encode(e.name);
+    const crc = crc32(e.bytes);
+    const { time, d } = dosDateTime(e.date || new Date());
+    const local = new Uint8Array(30 + nameBytes.length);
+    w32(local,0,0x04034b50); w16(local,4,20); w16(local,6,0); w16(local,8,0);
+    w16(local,10,time); w16(local,12,d); w32(local,14,crc);
+    w32(local,18,e.bytes.length); w32(local,22,e.bytes.length);
+    w16(local,26,nameBytes.length); w16(local,28,0);
+    local.set(nameBytes,30);
+    localParts.push(local, e.bytes);
+
+    const central = new Uint8Array(46 + nameBytes.length);
+    w32(central,0,0x02014b50); w16(central,4,20); w16(central,6,20); w16(central,8,0); w16(central,10,0);
+    w16(central,12,time); w16(central,14,d); w32(central,16,crc);
+    w32(central,20,e.bytes.length); w32(central,24,e.bytes.length);
+    w16(central,28,nameBytes.length); w16(central,30,0); w16(central,32,0);
+    w16(central,34,0); w16(central,36,0); w32(central,38,0);
+    w32(central,42,offset);
+    central.set(nameBytes,46);
+    centralParts.push(central);
+
+    offset += local.length + e.bytes.length;
+  });
+  const centralSize = centralParts.reduce((s,p)=>s+p.length,0);
+  const centralOffset = offset;
+  const end = new Uint8Array(22);
+  w32(end,0,0x06054b50); w16(end,4,0); w16(end,6,0);
+  w16(end,8,entries.length); w16(end,10,entries.length);
+  w32(end,12,centralSize); w32(end,16,centralOffset); w16(end,20,0);
+
+  const allParts = localParts.concat(centralParts, [end]);
+  const totalLen = allParts.reduce((s,p)=>s+p.length,0);
+  const zipBytes = new Uint8Array(totalLen);
+  let pos = 0;
+  allParts.forEach(p => { zipBytes.set(p, pos); pos += p.length; });
+  return zipBytes;
+}
+function slugify(s){
+  return String(s).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9]+/g,"-").replace(/^-+|-+$/g,"").toLowerCase() || "foto";
+}
+function selectedPhotosSorted(){
+  return photos.filter(p => selectedPhotoKeys.has(p.key)).sort((a,b) => new Date(a.ts)-new Date(b.ts));
+}
+async function downloadSelected(){
+  const sel = selectedPhotosSorted();
+  if (sel.length === 0) return;
+  const cell = schedule.cells[cellKey(galleryCell.day, galleryCell.slotId)];
+  const subjectSlug = slugify(cell ? cell.subject : "fotos");
+  try {
+    const entries = sel.map((p, i) => {
+      const d = new Date(p.ts);
+      const stamp = d.toISOString().slice(0,10) + "_" + String(d.getHours()).padStart(2,"0") + "-" + String(d.getMinutes()).padStart(2,"0");
+      return { name: subjectSlug + "_" + stamp + "_" + (i+1) + ".jpg", bytes: dataUrlToUint8Array(p.img), date: d };
+    });
+    const zipBytes = buildZip(entries);
+    const blob = new Blob([zipBytes], { type: "application/zip" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = subjectSlug + "-fotos.zip";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    showToast(sel.length===1 ? "Foto baixada." : sel.length+" fotos baixadas em um .zip.");
+  } catch(e){
+    showToast("Não consegui gerar o arquivo pra baixar.");
+  }
+}
+async function shareSelected(){
+  const sel = selectedPhotosSorted();
+  if (sel.length === 0) return;
+  try {
+    const files = sel.map((p, i) => {
+      const bytes = dataUrlToUint8Array(p.img);
+      return new File([bytes], "foto-"+(i+1)+".jpg", { type: "image/jpeg" });
+    });
+    if (navigator.canShare && navigator.canShare({ files })){
+      await navigator.share({ files, title: "Fotos do quadro" });
+    } else {
+      showToast("Esse navegador não permite compartilhar vários arquivos juntos. Tente baixar.");
+    }
+  } catch(e){
+    if (e && e.name !== "AbortError") showToast("Não consegui compartilhar as fotos.");
+  }
+}
+
 async function handleFiles(fileList){
   if (!fileList || fileList.length===0 || !galleryCell) return;
   uploading = true; render();
@@ -762,13 +923,35 @@ function renderGrid(activeDays){
   return html;
 }
 
+function fmtDueLabel(due){
+  const parts = due.split("-");
+  const label = parts[2]+"/"+parts[1];
+  const today = new Date().toISOString().slice(0,10);
+  if (due === today) return "Entrega hoje";
+  if (due < today) return "Atrasada · "+label;
+  return "Entrega "+label;
+}
+function subjectUrgency(norm){
+  const list = tasksBySubject[norm] || [];
+  let minDue = null;
+  list.forEach(t => {
+    if (!t.done && t.due){
+      if (minDue === null || t.due < minDue) minDue = t.due;
+    }
+  });
+  return { hasAny: list.length > 0, minDue };
+}
 function renderTasksSection(){
   const subjects = uniqueSubjects();
   if (subjects.length === 0) return "";
+  const today = new Date().toISOString().slice(0,10);
   subjects.sort((a,b) => {
-    const aHas = (tasksBySubject[a.norm]||[]).length > 0;
-    const bHas = (tasksBySubject[b.norm]||[]).length > 0;
-    if (aHas !== bHas) return aHas ? -1 : 1;
+    const ua = subjectUrgency(a.norm), ub = subjectUrgency(b.norm);
+    const aUrgent = ua.minDue !== null && ua.minDue <= today;
+    const bUrgent = ub.minDue !== null && ub.minDue <= today;
+    if (aUrgent !== bUrgent) return aUrgent ? -1 : 1;
+    if (aUrgent && bUrgent && ua.minDue !== ub.minDue) return ua.minDue < ub.minDue ? -1 : 1;
+    if (ua.hasAny !== ub.hasAny) return ua.hasAny ? -1 : 1;
     return a.name.localeCompare(b.name, "pt-BR");
   });
   let html = '<div class="tasks-section"><div class="tasks-header oa-heading">Pendências</div><div class="tasks-grid">';
@@ -786,13 +969,18 @@ function renderTasksSection(){
         if (isEditing){
           html += '<div class="task-item editing">' +
             '<input class="task-edit-input" id="taskEditInput_'+esc(t.id)+'" value="'+esc(editingTaskValue)+'" oninput="onEditTaskInput(this.value)" onkeydown="if(event.key===\'Enter\')saveEditTask();if(event.key===\'Escape\')cancelEditTask();" />' +
+            '<input type="date" class="task-edit-date" value="'+esc(editingTaskDue||"")+'" oninput="onEditTaskDateInput(this.value)" />' +
             '<button class="task-icon-btn" onclick="saveEditTask()">'+ICONS.check+'</button>' +
             '<button class="task-icon-btn" onclick="cancelEditTask()">'+ICONS.x+'</button>' +
           '</div>';
         } else {
+          const urgent = t.due && !t.done && t.due <= today;
           html += '<div class="task-item">' +
             '<button class="task-check'+(t.done?' checked':'')+'" onclick="toggleTask(\''+safeNorm+'\',\''+safeId+'\')">'+(t.done?ICONS.check:'')+'</button>' +
-            '<span class="task-text'+(t.done?' done':'')+'" onclick="startEditTask(\''+safeNorm+'\',\''+safeId+'\')">'+esc(t.text)+'</span>' +
+            '<div class="task-text-wrap">' +
+              '<span class="task-text'+(t.done?' done':'')+'" onclick="startEditTask(\''+safeNorm+'\',\''+safeId+'\')">'+esc(t.text)+'</span>' +
+              (t.due ? '<span class="task-due'+(urgent?' urgent':'')+'">'+fmtDueLabel(t.due)+'</span>' : '') +
+            '</div>' +
             '<button class="task-icon-btn" onclick="startEditTask(\''+safeNorm+'\',\''+safeId+'\')">'+ICONS.pencil+'</button>' +
             '<button class="task-del" onclick="deleteTask(\''+safeNorm+'\',\''+safeId+'\')">'+ICONS.x+'</button>' +
           '</div>';
@@ -800,8 +988,9 @@ function renderTasksSection(){
       });
     }
     html += '</div><div class="task-add-row">' +
-      '<input class="task-input" id="taskInput_'+esc(s.norm)+'" placeholder="Adicionar pendência..." onkeydown="if(event.key===\'Enter\'){addTaskFromInput(\''+safeNorm+'\');this.value=\'\';}" />' +
-      '<button class="task-add-btn" onclick="addTaskFromInput(\''+safeNorm+'\');document.getElementById(\'taskInput_'+safeNorm+'\').value=\'\';">'+ICONS.plus+'</button>' +
+      '<input class="task-input" id="taskInput_'+esc(s.norm)+'" placeholder="Adicionar pendência..." onkeydown="if(event.key===\'Enter\'){addTaskFromInput(\''+safeNorm+'\');}" />' +
+      '<input type="date" class="task-date-input" id="taskDateInput_'+esc(s.norm)+'" />' +
+      '<button class="task-add-btn" onclick="addTaskFromInput(\''+safeNorm+'\')">'+ICONS.plus+'</button>' +
     '</div></div>';
   });
   html += '</div></div>';
@@ -885,10 +1074,14 @@ function renderGallery(){
     subtitle = DAY_NAMES[galleryCell.day] + ' · ' + (slot ? slot.start+'–'+slot.end : '');
   }
   let html = '<div class="gallery-screen">';
-  html += '<div class="gallery-header"><button onclick="closeGallery()">'+ICONS.chevLeft+'</button><div>' +
+  html += '<div class="gallery-header"><button onclick="closeGallery()">'+ICONS.chevLeft+'</button><div style="flex:1">' +
     '<div class="oa-heading" style="font-size:15px;">'+esc(cell?cell.subject:'')+'</div>' +
     '<div class="oa-time" style="font-size:12px;color:#7A8190;">'+subtitle+'</div>' +
-  '</div></div>';
+  '</div>';
+  if (!loadingPhotos && photos.length > 0){
+    html += '<button class="chip-btn'+(selectMode?' active':'')+'" style="font-size:12px;padding:6px 10px;" onclick="toggleSelectMode()">'+(selectMode?'Cancelar':'Selecionar')+'</button>';
+  }
+  html += '</div>';
 
   if (!loadingPhotos){
     const thisWeek = weekKeyOf(new Date().toISOString());
@@ -906,19 +1099,25 @@ function renderGallery(){
   }
 
   html += '<div class="gallery-body">';
+  let weekPhotos = [];
   if (loadingPhotos){
     html += '<div class="loading-wrap"><div class="spinner"></div></div>';
   } else {
-    const weekPhotos = photos.filter(p => weekKeyOf(p.ts) === selectedWeek);
+    weekPhotos = photos.filter(p => weekKeyOf(p.ts) === selectedWeek);
     if (weekPhotos.length === 0){
       html += '<div class="empty-gallery">'+ICONS.gallery+'<p style="margin-top:10px">Nenhuma foto nessa semana ainda.<br/>Toque em "Tirar foto" para começar.</p></div>';
     } else {
+      if (selectMode) html += '<button class="select-all-link" onclick="selectAllInWeek()">Selecionar todas dessa semana</button>';
       groupByDate(weekPhotos).forEach(group => {
         html += '<div class="date-group"><div class="date-group-label">'+fmtDate(group.date)+'</div><div class="photo-grid">';
         group.items.forEach(p => {
-          html += '<button class="photo-thumb" onclick="openLightbox(\''+p.key+'\')"><img src="'+p.img+'" alt="Foto do quadro"/>' +
+          const sel = selectedPhotoKeys.has(p.key);
+          const tapAction = selectMode ? "togglePhotoSelect('"+p.key+"')" : "openLightbox('"+p.key+"')";
+          html += '<button class="photo-thumb'+(sel?' selected':'')+'" onclick="'+tapAction+'"><img src="'+p.img+'" alt="Foto do quadro"/>' +
             (linked.length > 1 ? '<span class="photo-day oa-time">'+DAY_NAMES[p.day].slice(0,3)+'</span>' : '') +
-            '<span class="photo-time oa-time">'+fmtTime(p.ts)+'</span></button>';
+            '<span class="photo-time oa-time">'+fmtTime(p.ts)+'</span>' +
+            (selectMode ? '<span class="photo-select-dot'+(sel?' on':'')+'">'+(sel?ICONS.check:'')+'</span>' : '') +
+          '</button>';
         });
         html += '</div></div>';
       });
@@ -926,16 +1125,25 @@ function renderGallery(){
   }
   html += '</div>';
 
-  html += '<div class="gallery-footer">' +
-    '<label class="btn-primary" for="cameraInput" style="display:flex;align-items:center;justify-content:center;gap:8px;opacity:'+(uploading?0.7:1)+'">' +
-      (uploading ? '<span class="spinner" style="width:16px;height:16px;border-width:2px;"></span>' : ICONS.camera) + ' Tirar foto' +
-    '</label>' +
-    '<label class="btn-outline" for="galleryInput" style="display:flex;align-items:center;justify-content:center;opacity:'+(uploading?0.7:1)+'">'+ICONS.gallery+'</label>' +
-  '</div>';
+  if (selectMode){
+    const count = selectedPhotoKeys.size;
+    html += '<div class="gallery-footer select-footer">' +
+      '<span class="select-count">'+count+' selecionada'+(count!==1?'s':'')+'</span>' +
+      '<button class="btn-outline" style="display:flex;align-items:center;gap:6px" onclick="shareSelected()" '+(count===0?'disabled':'')+'>'+ICONS.share+' Compartilhar</button>' +
+      '<button class="btn-primary" style="flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:10px 14px" onclick="downloadSelected()" '+(count===0?'disabled':'')+'>'+ICONS.download+' Baixar</button>' +
+    '</div>';
+  } else {
+    html += '<div class="gallery-footer">' +
+      '<label class="btn-primary" for="cameraInput" style="display:flex;align-items:center;justify-content:center;gap:8px;opacity:'+(uploading?0.7:1)+'">' +
+        (uploading ? '<span class="spinner" style="width:16px;height:16px;border-width:2px;"></span>' : ICONS.camera) + ' Tirar foto' +
+      '</label>' +
+      '<label class="btn-outline" for="galleryInput" style="display:flex;align-items:center;justify-content:center;opacity:'+(uploading?0.7:1)+'">'+ICONS.gallery+'</label>' +
+    '</div>';
+  }
   html += '<input class="hidden-file" id="cameraInput" type="file" accept="image/*" capture="environment" onchange="handleFiles(this.files);this.value=\'\'" />';
   html += '<input class="hidden-file" id="galleryInput" type="file" accept="image/*" multiple onchange="handleFiles(this.files);this.value=\'\'" />';
 
-  if (lightboxIndex !== null && photos[lightboxIndex]){
+  if (!selectMode && lightboxIndex !== null && photos[lightboxIndex]){
     const p = photos[lightboxIndex];
     html += '<div class="lightbox">' +
       '<div class="lightbox-top"><span class="oa-time" style="font-size:12px;">'+fmtDate(p.ts)+' · '+fmtTime(p.ts)+'</span>' +
