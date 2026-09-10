@@ -123,7 +123,6 @@
   .task-text.done{text-decoration:line-through;color:#9AA0AA;}
   .task-text-wrap{flex:1;display:flex;flex-direction:column;min-width:0;}
   .task-due{font-size:10.5px;color:#7A8190;margin-top:1px;}
-  .task-due.urgent{color:var(--danger);font-weight:600;}
   .task-icon-btn{flex:0 0 auto;background:none;border:none;color:#9AA0AA;padding:3px;}
   .task-del{flex:0 0 auto;background:none;border:none;color:#B7BCC5;padding:2px;}
   .task-item.editing{gap:6px;flex-wrap:wrap;}
@@ -931,6 +930,20 @@ function fmtDueLabel(due){
   if (due < today) return "Atrasada · "+label;
   return "Entrega "+label;
 }
+function daysUntil(due){
+  const d1 = new Date(due+"T00:00:00");
+  const d0 = new Date(new Date().toISOString().slice(0,10)+"T00:00:00");
+  return Math.round((d1 - d0) / 86400000);
+}
+function dueUrgencyColor(due){
+  const du = daysUntil(due);
+  if (du > 4) return null;
+  const t = Math.max(0, Math.min(1, (4 - du) / 4));
+  const c1 = [227,169,78]; // starts amber at 4 days out
+  const c2 = [178,66,66];  // full alert red at due date / overdue
+  const mix = c1.map((v,i) => Math.round(v + (c2[i]-v)*t));
+  return "rgb("+mix.join(",")+")";
+}
 function subjectUrgency(norm){
   const list = tasksBySubject[norm] || [];
   let minDue = null;
@@ -939,18 +952,15 @@ function subjectUrgency(norm){
       if (minDue === null || t.due < minDue) minDue = t.due;
     }
   });
-  return { hasAny: list.length > 0, minDue };
+  return { hasAny: list.length > 0, hasDue: minDue !== null, minDue };
 }
 function renderTasksSection(){
   const subjects = uniqueSubjects();
   if (subjects.length === 0) return "";
-  const today = new Date().toISOString().slice(0,10);
   subjects.sort((a,b) => {
     const ua = subjectUrgency(a.norm), ub = subjectUrgency(b.norm);
-    const aUrgent = ua.minDue !== null && ua.minDue <= today;
-    const bUrgent = ub.minDue !== null && ub.minDue <= today;
-    if (aUrgent !== bUrgent) return aUrgent ? -1 : 1;
-    if (aUrgent && bUrgent && ua.minDue !== ub.minDue) return ua.minDue < ub.minDue ? -1 : 1;
+    if (ua.hasDue !== ub.hasDue) return ua.hasDue ? -1 : 1;
+    if (ua.hasDue && ub.hasDue && ua.minDue !== ub.minDue) return ua.minDue < ub.minDue ? -1 : 1;
     if (ua.hasAny !== ub.hasAny) return ua.hasAny ? -1 : 1;
     return a.name.localeCompare(b.name, "pt-BR");
   });
@@ -974,12 +984,13 @@ function renderTasksSection(){
             '<button class="task-icon-btn" onclick="cancelEditTask()">'+ICONS.x+'</button>' +
           '</div>';
         } else {
-          const urgent = t.due && !t.done && t.due <= today;
+          const urgentColor = (t.due && !t.done) ? dueUrgencyColor(t.due) : null;
+          const dueStyle = urgentColor ? ' style="color:'+urgentColor+';font-weight:700;"' : '';
           html += '<div class="task-item">' +
             '<button class="task-check'+(t.done?' checked':'')+'" onclick="toggleTask(\''+safeNorm+'\',\''+safeId+'\')">'+(t.done?ICONS.check:'')+'</button>' +
             '<div class="task-text-wrap">' +
               '<span class="task-text'+(t.done?' done':'')+'" onclick="startEditTask(\''+safeNorm+'\',\''+safeId+'\')">'+esc(t.text)+'</span>' +
-              (t.due ? '<span class="task-due'+(urgent?' urgent':'')+'">'+fmtDueLabel(t.due)+'</span>' : '') +
+              (t.due ? '<span class="task-due"'+dueStyle+'>'+fmtDueLabel(t.due)+'</span>' : '') +
             '</div>' +
             '<button class="task-icon-btn" onclick="startEditTask(\''+safeNorm+'\',\''+safeId+'\')">'+ICONS.pencil+'</button>' +
             '<button class="task-del" onclick="deleteTask(\''+safeNorm+'\',\''+safeId+'\')">'+ICONS.x+'</button>' +
